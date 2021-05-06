@@ -13,7 +13,7 @@ STATUS getLocalhostIpAddresses(PKvsIpAddress destIpList, PUINT32 pDestIpListLen,
 
 #ifdef _WIN32
     DWORD retWinStatus, sizeAAPointer;
-    PIP_ADAPTER_ADDRESSES adapterAddresses, aa = NULL;
+    PIP_ADAPTER_ADDRESSES adapterAddresses = NULL, aa = NULL;
     PIP_ADAPTER_UNICAST_ADDRESS ua;
 #else
     struct ifaddrs *ifaddr = NULL, *ifa = NULL;

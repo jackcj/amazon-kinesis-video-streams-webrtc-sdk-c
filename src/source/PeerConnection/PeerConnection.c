@@ -170,7 +170,7 @@ STATUS sendPacketToRtpReceiver(PKvsPeerConnection pKvsPeerConnection, PBYTE pBuf
 {
     STATUS retStatus = STATUS_SUCCESS;
     PDoubleListNode pCurNode = NULL;
-    PKvsRtpTransceiver pTransceiver;
+    PKvsRtpTransceiver pTransceiver = NULL;
     UINT64 item, now;
     UINT32 ssrc;
     PRtpPacket pRtpPacket = NULL;

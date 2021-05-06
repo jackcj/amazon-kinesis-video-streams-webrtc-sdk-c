@@ -77,7 +77,7 @@ INT32 tlsSessionSendCallback(PVOID customData, const unsigned char* buf, ULONG l
 
 CleanUp:
 
-    return STATUS_FAILED(retStatus) ? -retStatus : len;
+    return STATUS_FAILED(retStatus) ? (-1 * retStatus) : len;
 }
 
 INT32 tlsSessionReceiveCallback(PVOID customData, unsigned char* buf, ULONG len)
@@ -97,7 +97,7 @@ INT32 tlsSessionReceiveCallback(PVOID customData, unsigned char* buf, ULONG len)
 
 CleanUp:
 
-    return STATUS_FAILED(retStatus) ? -retStatus : readBytes;
+    return STATUS_FAILED(retStatus) ? (-1 * retStatus) : readBytes;
 }
 
 STATUS tlsSessionStart(PTlsSession pTlsSession, BOOL isServer)

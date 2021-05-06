@@ -119,7 +119,7 @@ INT32 dtlsSessionSendCallback(PVOID customData, const unsigned char* pBuf, ULONG
     pDtlsSession->dtlsSessionCallbacks.outboundPacketFn(pDtlsSession->dtlsSessionCallbacks.outBoundPacketFnCustomData, (PBYTE) pBuf, len);
 
 CleanUp:
-    return STATUS_FAILED(retStatus) ? -retStatus : len;
+    return STATUS_FAILED(retStatus) ? (-1 * retStatus) : len;
 }
 
 INT32 dtlsSessionReceiveCallback(PVOID customData, unsigned char* pBuf, ULONG len)
@@ -140,7 +140,7 @@ INT32 dtlsSessionReceiveCallback(PVOID customData, unsigned char* pBuf, ULONG le
 
 CleanUp:
     LEAVES();
-    return STATUS_FAILED(retStatus) ? -retStatus : readBytes;
+    return STATUS_FAILED(retStatus) ? (-1 * retStatus) : readBytes;
 }
 
 // Provide mbedtls timer functionality for retransmission and timeout calculation
