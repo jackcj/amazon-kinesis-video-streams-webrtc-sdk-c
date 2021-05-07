@@ -9,7 +9,7 @@
 STATUS jitterBufferInternalParse(PJitterBuffer pJitterBuffer, BOOL bufferClosed);
 
 STATUS createJitterBuffer(FrameReadyFunc onFrameReadyFunc, FrameDroppedFunc onFrameDroppedFunc, DepayRtpPayloadFunc depayRtpPayloadFunc,
-                          UINT32 maxLatency, UINT32 clockRate, UINT64 customData, PJitterBuffer* ppJitterBuffer)
+                          UINT32 maxLatency, UINT32 clockRate, UINT64 customData, PJitterBuffer* ppJitterBuffer, UINT32 packet_buffer_total)
 {
     ENTERS();
     STATUS retStatus = STATUS_SUCCESS;
@@ -39,7 +39,15 @@ STATUS createJitterBuffer(FrameReadyFunc onFrameReadyFunc, FrameDroppedFunc onFr
     pJitterBuffer->firstFrameProcessed = FALSE;
 
     pJitterBuffer->customData = customData;
-    CHK_STATUS(hashTableCreateWithParams(JITTER_BUFFER_HASH_TABLE_BUCKET_COUNT, JITTER_BUFFER_HASH_TABLE_BUCKET_LENGTH,
+
+    if (packet_buffer_total == 0 || packet_buffer_total > JITTER_BUFFER_HASH_TABLE_BUCKET_COUNT)
+    {
+        packet_buffer_total = JITTER_BUFFER_HASH_TABLE_BUCKET_COUNT;
+    }
+    DLOGD("%s:%s:%d create recv buffer total : %d\n"
+        , __FILE__, __FUNCTION__, __LINE__, packet_buffer_total);
+
+    CHK_STATUS(hashTableCreateWithParams(packet_buffer_total, JITTER_BUFFER_HASH_TABLE_BUCKET_LENGTH,
                                          &pJitterBuffer->pPkgBufferHashTable));
 
 CleanUp:

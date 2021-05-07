@@ -130,7 +130,9 @@ typedef struct {
     UINT64 onSenderBandwidthEstimationCustomData;
     //add by chenjie 2021-05-06
     UINT64 onRemoteMediaChannelCreatedCustomData;
+    UINT64 onRemoteDataChannelCreatedCustomData;
     RtcRemoteMediaChannelCreated onRemoteMediaChannelCreatedFn;
+    RtcRemoteDataChannelCreated onRemoteDataChannelCreatedFn;
 } KvsPeerConnection, *PKvsPeerConnection;
 
 typedef struct {

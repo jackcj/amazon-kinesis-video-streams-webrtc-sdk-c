@@ -271,8 +271,8 @@ STATUS setTransceiverPayloadTypes(PHashTable codecTable, PHashTable rtxTable, PD
     STATUS retStatus = STATUS_SUCCESS;
     PDoubleListNode pCurNode = NULL;
     PKvsRtpTransceiver pKvsRtpTransceiver;
-    UINT64 data;
-
+    UINT64 data = 0;
+    UINT32 rolling_packet_buffer_total = 0;
     // Loop over Transceivers and set the payloadType (which what we got from the other side)
     // If a codec we want to send wasn't supported by the other return an error
     CHK_STATUS(doubleListGetHeadNode(pTransceivers, &pCurNode));
@@ -294,7 +294,14 @@ STATUS setTransceiverPayloadTypes(PHashTable codecTable, PHashTable rtxTable, PD
             }
         }
 
-        CHK_STATUS(createRtpRollingBuffer(DEFAULT_ROLLING_BUFFER_DURATION_IN_SECONDS * HIGHEST_EXPECTED_BIT_RATE / 8 / DEFAULT_MTU_SIZE,
+        rolling_packet_buffer_total = pKvsRtpTransceiver->sender.track.send_packet_buffer_total;
+        if (rolling_packet_buffer_total == 0 ||
+            (rolling_packet_buffer_total > DEFAULT_ROLLING_BUFFER_DURATION_IN_SECONDS * HIGHEST_EXPECTED_BIT_RATE / 8 / DEFAULT_MTU_SIZE))
+        {
+            rolling_packet_buffer_total = DEFAULT_ROLLING_BUFFER_DURATION_IN_SECONDS * HIGHEST_EXPECTED_BIT_RATE / 8 / DEFAULT_MTU_SIZE;
+        }
+
+        CHK_STATUS(createRtpRollingBuffer(rolling_packet_buffer_total,
                                           &pKvsRtpTransceiver->sender.packetBuffer));
         CHK_STATUS(createRetransmitter(DEFAULT_SEQ_NUM_BUFFER_SIZE, DEFAULT_VALID_INDEX_BUFFER_SIZE, &pKvsRtpTransceiver->sender.retransmitter));
     }

@@ -848,21 +848,21 @@ CleanUp:
     return retStatus;
 }
 
-STATUS peerConnectionRemoteMediaChannelCreated(PRtcPeerConnection pRtcPeerConnection, UINT64 customData, RtcRemoteMediaChannelCreated cb)
+STATUS peerConnectionRemoteMediaChannelCreated(PRtcPeerConnection pRtcPeerConnection
+    , RtcRemoteMediaChannelCreated media_cb, UINT64 mediaCustomData
+)
 {
     ENTERS();
     STATUS retStatus = STATUS_SUCCESS;
     PKvsPeerConnection pKvsPeerConnection = (PKvsPeerConnection)pRtcPeerConnection;
     BOOL locked = FALSE;
 
-    CHK(pKvsPeerConnection != NULL && cb != NULL, STATUS_NULL_ARG);
-
+    CHK(pKvsPeerConnection != NULL && media_cb != NULL, STATUS_NULL_ARG);
     MUTEX_LOCK(pKvsPeerConnection->peerConnectionObjLock);
     locked = TRUE;
 
-    pKvsPeerConnection->onRemoteMediaChannelCreatedFn = cb;
-    pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData = customData;
-
+    pKvsPeerConnection->onRemoteMediaChannelCreatedFn = media_cb;
+    pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData = mediaCustomData;
 CleanUp:
 
     if (locked) {
@@ -872,6 +872,34 @@ CleanUp:
     LEAVES();
     return retStatus;
 }
+
+STATUS peerConnectionRemoteDataChannelCreated(PRtcPeerConnection pRtcPeerConnection
+    , RtcRemoteDataChannelCreated data_cb, UINT64 dataCustomData
+)
+{
+    ENTERS();
+    STATUS retStatus = STATUS_SUCCESS;
+    PKvsPeerConnection pKvsPeerConnection = (PKvsPeerConnection)pRtcPeerConnection;
+    BOOL locked = FALSE;
+
+    CHK(pKvsPeerConnection != NULL, STATUS_NULL_ARG);
+    CHK(data_cb != NULL, STATUS_NULL_ARG);
+    MUTEX_LOCK(pKvsPeerConnection->peerConnectionObjLock);
+    locked = TRUE;
+
+    pKvsPeerConnection->onRemoteDataChannelCreatedCustomData = dataCustomData;
+    pKvsPeerConnection->onRemoteDataChannelCreatedFn = data_cb;
+CleanUp:
+
+    if (locked) {
+        MUTEX_UNLOCK(pKvsPeerConnection->peerConnectionObjLock);
+    }
+
+    LEAVES();
+    return retStatus;
+}
+
+
 
 STATUS peerConnectionOnDataChannel(PRtcPeerConnection pRtcPeerConnection, UINT64 customData, RtcOnDataChannel rtcOnDataChannel)
 {
@@ -1160,7 +1188,7 @@ STATUS addTransceiver(PRtcPeerConnection pPeerConnection, PRtcMediaStreamTrack p
     CHK_STATUS(createKvsRtpTransceiver(direction, pKvsPeerConnection, ssrc, rtxSsrc, pRtcMediaStreamTrack, NULL, pRtcMediaStreamTrack->codec,
                                        &pKvsRtpTransceiver));
     CHK_STATUS(createJitterBuffer(onFrameReadyFunc, onFrameDroppedFunc, depayFunc, DEFAULT_JITTER_BUFFER_MAX_LATENCY, clockRate,
-                                  (UINT64) pKvsRtpTransceiver, &pJitterBuffer));
+                                  (UINT64) pKvsRtpTransceiver, &pJitterBuffer, pRtcMediaStreamTrack->recv_packet_buffer_total));
     CHK_STATUS(kvsRtpTransceiverSetJitterBuffer(pKvsRtpTransceiver, pJitterBuffer));
 
     // after pKvsRtpTransceiver is successfully created, jitterBuffer will be freed by pKvsRtpTransceiver.
@@ -1185,6 +1213,32 @@ CleanUp:
     }
 
     LEAVES();
+    return retStatus;
+}
+
+STATUS removeTransceiver(PRtcPeerConnection pPeerConnection, PRtcRtpTransceiver pRtcRtpTransceiver)
+{
+    STATUS retStatus = STATUS_SUCCESS;
+    PDoubleListNode pCurNode = NULL;
+    UINT64 item = 0;
+    CHK(pRtcRtpTransceiver != NULL, STATUS_NULL_ARG);
+    CHK(pPeerConnection != NULL, STATUS_NULL_ARG);
+    PKvsRtpTransceiver pKvsRtpTransceiver = (PKvsRtpTransceiver)pRtcRtpTransceiver;
+    PKvsPeerConnection pKvsPeerConnection = (PKvsPeerConnection)pPeerConnection;
+    timerQueueCancelTimer(pKvsPeerConnection->timerQueueHandle, pKvsRtpTransceiver->rtcpReportsTimerId, (UINT64)pKvsRtpTransceiver);
+    CHK_LOG_ERR(doubleListGetHeadNode(pKvsPeerConnection->pTransceivers, &pCurNode));
+    while (pCurNode != NULL) {
+        CHK_LOG_ERR(doubleListGetNodeData(pCurNode, &item));
+        if (item == (UINT64)pKvsRtpTransceiver)
+        {
+            doubleListRemoveNode(pKvsPeerConnection->pTransceivers, pCurNode);
+            CHK_LOG_ERR(freeKvsRtpTransceiver(&pKvsRtpTransceiver));
+            break;
+        }
+        pCurNode = pCurNode->pNext;
+    }
+
+CleanUp:
     return retStatus;
 }
 
@@ -1419,19 +1473,25 @@ STATUS setRemoteDescriptionEx(PRtcPeerConnection pPeerConnection, PCHAR sdp, UIN
         {
             if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "video", SIZEOF("video") - 1) == 0)
             {
-                pKvsPeerConnection->onRemoteMediaChannelCreatedFn(pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData, Channel_Video);
+                pKvsPeerConnection->onRemoteMediaChannelCreatedFn(pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData, MEDIA_STREAM_TRACK_KIND_VIDEO);
             }
             else if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "audio", SIZEOF("audio") - 1) == 0)
             {
-                pKvsPeerConnection->onRemoteMediaChannelCreatedFn(pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData, Channel_Audio);
+                pKvsPeerConnection->onRemoteMediaChannelCreatedFn(pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData, MEDIA_STREAM_TRACK_KIND_AUDIO);
             }
-#ifdef ENABLE_DATA_CHANNEL
-            else if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "application", SIZEOF("application") - 1) == 0) {
-                pKvsPeerConnection->sctpIsEnabled = TRUE;
-                pKvsPeerConnection->onRemoteMediaChannelCreatedFn(pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData, Channel_Data);
-            }
-#endif
         }
+
+#ifdef ENABLE_DATA_CHANNEL
+        if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "application", SIZEOF("application") - 1) == 0) 
+        {
+            if (pKvsPeerConnection->onRemoteDataChannelCreatedFn != NULL)
+            {
+
+                pKvsPeerConnection->sctpIsEnabled = TRUE;
+                pKvsPeerConnection->onRemoteDataChannelCreatedFn(pKvsPeerConnection->onRemoteDataChannelCreatedCustomData);
+            }
+        }
+#endif
 
         for (j = 0; j < pSessionDescription->mediaDescriptions[i].mediaAttributesCount; j++) {
             if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "ice-ufrag") == 0) {
@@ -1486,5 +1546,26 @@ STATUS setRemoteDescriptionEx(PRtcPeerConnection pPeerConnection, PCHAR sdp, UIN
 CleanUp:
 
     LEAVES();
+    return retStatus;
+}
+
+/// <summary>
+/// get frame buffer size
+/// </summary>
+/// <param name="pRtcRtpTransceiver"></param>
+/// <param name="pSzie"></param>
+/// <param name="pCapacity"></param>
+/// <returns></returns>
+STATUS getFrameBufferSizeAndCapacity(PRtcRtpTransceiver pRtcRtpTransceiver, PUINT32 pSzie, PUINT32 pCapacity)
+{
+    STATUS retStatus = STATUS_SUCCESS;
+    PKvsRtpTransceiver pKvsRtpTransceiver = (PKvsRtpTransceiver)pRtcRtpTransceiver;
+    CHK(pKvsRtpTransceiver != NULL && pSzie != NULL && pCapacity != NULL, STATUS_NULL_ARG);
+    CHK(pKvsRtpTransceiver->sender.packetBuffer->pRollingBuffer!=NULL,STATUS_NULL_ARG);
+    CHK_STATUS(rollingBufferGetSize(pKvsRtpTransceiver->sender.packetBuffer->pRollingBuffer, pSzie));
+    *pCapacity = pKvsRtpTransceiver->sender.packetBuffer->pRollingBuffer->capacity;
+CleanUp:
+    CHK_LOG_ERR(retStatus);
+
     return retStatus;
 }

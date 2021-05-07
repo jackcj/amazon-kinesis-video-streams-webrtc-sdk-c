@@ -664,13 +664,6 @@ typedef SIGNALING_CLIENT_HANDLE* PSIGNALING_CLIENT_HANDLE;
 ////////////////////////////////////////////////
 ///add by chenjie 2021-05-06
 
-typedef enum
-{
-    Channel_Audio = 0,
-    Channel_Video,
-    Channel_Data,
-    Channel_Unsupported
-}MediaChannelType;
 /*! \addtogroup PublicEnums
  * @brief RTC_PEER_CONNECTION_STATE Stats of RTC peer connection
  * Reference: https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum
@@ -849,8 +842,9 @@ typedef enum {
 /// add by chenjie 2021-05-06
 /// remote media channel created;
 /// </summary>
-typedef STATUS(*RtcRemoteMediaChannelCreated)(UINT64, MediaChannelType);
+typedef STATUS(*RtcRemoteMediaChannelCreated)(UINT64, MEDIA_STREAM_TRACK_KIND);
 
+typedef STATUS(*RtcRemoteDataChannelCreated)(UINT64);
 
 /*! \addtogroup Callbacks
  * @brief RtcOnFrame is fired everytime a frame is received from
@@ -980,6 +974,8 @@ typedef struct {
     CHAR trackId[MAX_MEDIA_STREAM_ID_LEN + 1];  //!< non-standard, id of this individual track
     CHAR streamId[MAX_MEDIA_STREAM_ID_LEN + 1]; //!< non-standard, id of the MediaStream this track belongs too
     MEDIA_STREAM_TRACK_KIND kind;               //!< Kind of track - audio or video
+    UINT32 send_packet_buffer_total;            //!< controll send buffer size
+    UINT32 recv_packet_buffer_total;            //!< controll recv buffer size
 } RtcMediaStreamTrack, *PRtcMediaStreamTrack;
 
 /**
@@ -1473,7 +1469,8 @@ PUBLIC_API STATUS freePeerConnection(PRtcPeerConnection*);
 PUBLIC_API STATUS peerConnectionOnIceCandidate(PRtcPeerConnection, UINT64, RtcOnIceCandidate);
 
 //add by chenjie 2021-05-06
-PUBLIC_API STATUS peerConnectionRemoteMediaChannelCreated(PRtcPeerConnection, UINT64, RtcRemoteMediaChannelCreated);
+PUBLIC_API STATUS peerConnectionRemoteMediaChannelCreated(PRtcPeerConnection, RtcRemoteMediaChannelCreated, UINT64);
+PUBLIC_API STATUS peerConnectionRemoteDataChannelCreated(PRtcPeerConnection, RtcRemoteDataChannelCreated, UINT64);
 
 /**
  * @brief Set a callback for transport-wide sender bandwidth estimation results
@@ -1662,7 +1659,10 @@ PUBLIC_API STATUS closePeerConnection(PRtcPeerConnection);
  * @return STATUS code of the execution. STATUS_SUCCESS on success
  */
 PUBLIC_API STATUS addTransceiver(PRtcPeerConnection, PRtcMediaStreamTrack, PRtcRtpTransceiverInit, PRtcRtpTransceiver*);
-
+/*
+*   add by chenjie 2021-05-06
+*/
+PUBLIC_API STATUS removeTransceiver(PRtcPeerConnection, PRtcRtpTransceiver);
 /**
  * @brief Set a callback for transceiver frame
  *
@@ -2031,6 +2031,16 @@ PUBLIC_API STATUS freeRtcCertificate(PRtcCertificate);
  */
 PUBLIC_API STATUS setRemoteDescriptionEx(PRtcPeerConnection, PCHAR, UINT32);
 
+/**
+* @brief get stream buffer size and capacity via the configuration specified by the RtcRtpTransceiver
+*
+* @param[in] PRtcRtpTransceiver Configured and connected RtcRtpTransceiver to send media
+* @param[in] get buffer used size
+* @param[in] get buffer capacity size
+
+* @return STATUS code of the execution. STATUS_SUCCESS on success
+*/
+PUBLIC_API STATUS getFrameBufferSizeAndCapacity(PRtcRtpTransceiver, PUINT32, PUINT32);
 
 /*!@} */
 #ifdef __cplusplus

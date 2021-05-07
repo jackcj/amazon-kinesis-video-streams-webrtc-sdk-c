@@ -39,8 +39,8 @@ typedef struct {
     PHashTable pPkgBufferHashTable;
 } JitterBuffer, *PJitterBuffer;
 
-//constructor
-STATUS createJitterBuffer(FrameReadyFunc, FrameDroppedFunc, DepayRtpPayloadFunc, UINT32, UINT32, UINT64, PJitterBuffer*);
+//constructor modify by chenjie 2021-05-06
+STATUS createJitterBuffer(FrameReadyFunc, FrameDroppedFunc, DepayRtpPayloadFunc, UINT32, UINT32, UINT64, PJitterBuffer*, UINT32);
 //destructor
 STATUS freeJitterBuffer(PJitterBuffer*);
 STATUS jitterBufferPush(PJitterBuffer, PRtpPacket, PBOOL);
