@@ -1996,6 +1996,24 @@ PUBLIC_API STATUS createRtcCertificate(PRtcCertificate*);
  */
 PUBLIC_API STATUS freeRtcCertificate(PRtcCertificate);
 
+
+///add by chenjie 2021-05-6
+
+/**
+ * @brief Instructs the RtcPeerConnection to apply
+ * the supplied RtcSessionDescriptionInit as the remote description.
+ *
+ * Reference: https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-setremotedescription
+ *
+ * @param[in] PRtcPeerConnection Initialized RtcPeerConnection
+ * @param[in] PCHAR  that becomes our new remote description
+ * @param[in] UINT32 sdp len
+ *
+ * @return STATUS code of the execution. STATUS_SUCCESS on success
+ */
+PUBLIC_API STATUS setRemoteDescriptionEx(PRtcPeerConnection, PCHAR, UINT32);
+
+
 /*!@} */
 #ifdef __cplusplus
 }

@@ -71,7 +71,7 @@ CleanUp:
     return retStatus;
 }
 
-STATUS deserializeSessionDescription(PSessionDescription pSessionDescription, PCHAR sdpBytes)
+STATUS deserializeSessionDescription(PSessionDescription pSessionDescription, PCHAR sdpBytes, UINT32 sdpLen)
 {
     ENTERS();
     STATUS retStatus = STATUS_SUCCESS;
@@ -80,7 +80,7 @@ STATUS deserializeSessionDescription(PSessionDescription pSessionDescription, PC
     CHK(sdpBytes != NULL, STATUS_SESSION_DESCRIPTION_INVALID_SESSION_DESCRIPTION);
 
     curr = sdpBytes;
-    tail = sdpBytes + STRLEN(sdpBytes);
+    tail = sdpBytes + sdpLen;// STRLEN(sdpBytes);
 
     while ((next = STRNCHR(curr, tail - curr, '\n')) != NULL) {
         lineLen = (UINT32)(next - curr);

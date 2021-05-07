@@ -1011,92 +1011,8 @@ STATUS setRemoteDescription(PRtcPeerConnection pPeerConnection, PRtcSessionDescr
 
     CHK(pPeerConnection != NULL, STATUS_NULL_ARG);
     PKvsPeerConnection pKvsPeerConnection = (PKvsPeerConnection) pPeerConnection;
-    PSessionDescription pSessionDescription = &pKvsPeerConnection->remoteSessionDescription;
-
-    CHK(pSessionDescriptionInit != NULL, STATUS_NULL_ARG);
-
-    MEMSET(pSessionDescription, 0x00, SIZEOF(SessionDescription));
-    pKvsPeerConnection->dtlsIsServer = FALSE;
-    /* Assume cant trickle at first */
-    NULLABLE_SET_VALUE(pKvsPeerConnection->canTrickleIce, FALSE);
-
-    CHK_STATUS(deserializeSessionDescription(pSessionDescription, pSessionDescriptionInit->sdp));
-
-    for (i = 0; i < pSessionDescription->sessionAttributesCount; i++) {
-        if (STRCMP(pSessionDescription->sdpAttributes[i].attributeName, "fingerprint") == 0) {
-            STRNCPY(pKvsPeerConnection->remoteCertificateFingerprint, pSessionDescription->sdpAttributes[i].attributeValue + 8,
-                    CERTIFICATE_FINGERPRINT_LENGTH);
-        } else if (pKvsPeerConnection->isOffer && STRCMP(pSessionDescription->sdpAttributes[i].attributeName, "setup") == 0) {
-            pKvsPeerConnection->dtlsIsServer = STRCMP(pSessionDescription->sdpAttributes[i].attributeValue, "active") == 0;
-        } else if (STRCMP(pSessionDescription->sdpAttributes[i].attributeName, "ice-options") == 0 &&
-                   STRSTR(pSessionDescription->sdpAttributes[i].attributeValue, "trickle") != NULL) {
-            NULLABLE_SET_VALUE(pKvsPeerConnection->canTrickleIce, TRUE);
-        }
-    }
-
-    for (i = 0; i < pSessionDescription->mediaCount; i++) {
-#ifdef ENABLE_DATA_CHANNEL
-        if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "application", SIZEOF("application") - 1) == 0) {
-            pKvsPeerConnection->sctpIsEnabled = TRUE;
-        }
-#endif
-
-        for (j = 0; j < pSessionDescription->mediaDescriptions[i].mediaAttributesCount; j++) {
-            if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "ice-ufrag") == 0) {
-                remoteIceUfrag = pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue;
-            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "ice-pwd") == 0) {
-                remoteIcePwd = pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue;
-            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "candidate") == 0) {
-                // Ignore the return value, we have candidates we don't support yet like TURN
-                iceAgentAddRemoteCandidate(pKvsPeerConnection->pIceAgent, pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue);
-            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "fingerprint") == 0) {
-                STRNCPY(pKvsPeerConnection->remoteCertificateFingerprint,
-                        pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue + 8, CERTIFICATE_FINGERPRINT_LENGTH);
-            } else if (pKvsPeerConnection->isOffer &&
-                       STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "setup") == 0) {
-                pKvsPeerConnection->dtlsIsServer = STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue, "active") == 0;
-            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "ice-options") == 0 &&
-                       STRSTR(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue, "trickle") != NULL) {
-                NULLABLE_SET_VALUE(pKvsPeerConnection->canTrickleIce, TRUE);
-                // This code is only here because Chrome does NOT adhere to the standard and adds ice-options as a media level attribute
-                // The standard dictates clearly that it should be a session level attribute:  https://tools.ietf.org/html/rfc5245#page-76
-            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "extmap") == 0 &&
-                       STRSTR(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue, TWCC_EXT_URL) != NULL) {
-                pKvsPeerConnection->twccExtId = parseExtId(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue);
-            }
-        }
-    }
-
-    CHK(remoteIceUfrag != NULL && remoteIcePwd != NULL, STATUS_SESSION_DESCRIPTION_MISSING_ICE_VALUES);
-    CHK(pKvsPeerConnection->remoteCertificateFingerprint[0] != '\0', STATUS_SESSION_DESCRIPTION_MISSING_CERTIFICATE_FINGERPRINT);
-
-    if (!IS_EMPTY_STRING(pKvsPeerConnection->remoteIceUfrag) && !IS_EMPTY_STRING(pKvsPeerConnection->remoteIcePwd) &&
-        STRNCMP(pKvsPeerConnection->remoteIceUfrag, remoteIceUfrag, MAX_ICE_UFRAG_LEN) != 0 &&
-        STRNCMP(pKvsPeerConnection->remoteIcePwd, remoteIcePwd, MAX_ICE_PWD_LEN) != 0) {
-        CHK_STATUS(generateJSONSafeString(pKvsPeerConnection->localIceUfrag, LOCAL_ICE_UFRAG_LEN));
-        CHK_STATUS(generateJSONSafeString(pKvsPeerConnection->localIcePwd, LOCAL_ICE_PWD_LEN));
-        CHK_STATUS(iceAgentRestart(pKvsPeerConnection->pIceAgent, pKvsPeerConnection->localIceUfrag, pKvsPeerConnection->localIcePwd));
-        CHK_STATUS(iceAgentStartGathering(pKvsPeerConnection->pIceAgent));
-    }
-
-    STRNCPY(pKvsPeerConnection->remoteIceUfrag, remoteIceUfrag, MAX_ICE_UFRAG_LEN);
-    STRNCPY(pKvsPeerConnection->remoteIcePwd, remoteIcePwd, MAX_ICE_PWD_LEN);
-
-    CHK_STATUS(iceAgentStartAgent(pKvsPeerConnection->pIceAgent, pKvsPeerConnection->remoteIceUfrag, pKvsPeerConnection->remoteIcePwd,
-                                  pKvsPeerConnection->isOffer));
-
-    if (!pKvsPeerConnection->isOffer) {
-        CHK_STATUS(setPayloadTypesFromOffer(pKvsPeerConnection->pCodecTable, pKvsPeerConnection->pRtxTable, pSessionDescription));
-    }
-    CHK_STATUS(setTransceiverPayloadTypes(pKvsPeerConnection->pCodecTable, pKvsPeerConnection->pRtxTable, pKvsPeerConnection->pTransceivers));
-    CHK_STATUS(setReceiversSsrc(pSessionDescription, pKvsPeerConnection->pTransceivers));
-
-    if (NULL != GETENV(DEBUG_LOG_SDP)) {
-        DLOGD("REMOTE_SDP:%s\n", pSessionDescriptionInit->sdp);
-    }
-
+    CHK_STATUS(setRemoteDescriptionEx(pKvsPeerConnection, pSessionDescriptionInit->sdp, STRLEN(pSessionDescriptionInit->sdp)));
 CleanUp:
-
     LEAVES();
     return retStatus;
 }
@@ -1437,6 +1353,109 @@ CleanUp:
         MUTEX_UNLOCK(pc->twccLock);
     }
     CHK_LOG_ERR(retStatus);
+
+    LEAVES();
+    return retStatus;
+}
+
+
+/// <summary>
+/// add by chenjie 2021-05-06
+/// </summary>
+/// <param name="pPeerConnection"></param>
+/// <param name="sdp"></param>
+/// <param name="len"></param>
+/// <returns>0 ok,other error</returns>
+STATUS setRemoteDescriptionEx(PRtcPeerConnection pPeerConnection, PCHAR sdp, UINT32 len)
+{
+        ENTERS();
+    STATUS retStatus = STATUS_SUCCESS;
+    PCHAR remoteIceUfrag = NULL, remoteIcePwd = NULL;
+    UINT32 i, j;
+
+    CHK(pPeerConnection != NULL, STATUS_NULL_ARG);
+    PKvsPeerConnection pKvsPeerConnection = (PKvsPeerConnection) pPeerConnection;
+    PSessionDescription pSessionDescription = &pKvsPeerConnection->remoteSessionDescription;
+
+    CHK(sdp != NULL, STATUS_NULL_ARG);
+
+    MEMSET(pSessionDescription, 0x00, SIZEOF(SessionDescription));
+    pKvsPeerConnection->dtlsIsServer = FALSE;
+    /* Assume cant trickle at first */
+    NULLABLE_SET_VALUE(pKvsPeerConnection->canTrickleIce, FALSE);
+
+    CHK_STATUS(deserializeSessionDescription(pSessionDescription, sdp, len));
+
+    for (i = 0; i < pSessionDescription->sessionAttributesCount; i++) {
+        if (STRCMP(pSessionDescription->sdpAttributes[i].attributeName, "fingerprint") == 0) {
+            STRNCPY(pKvsPeerConnection->remoteCertificateFingerprint, pSessionDescription->sdpAttributes[i].attributeValue + 8,
+                    CERTIFICATE_FINGERPRINT_LENGTH);
+        } else if (pKvsPeerConnection->isOffer && STRCMP(pSessionDescription->sdpAttributes[i].attributeName, "setup") == 0) {
+            pKvsPeerConnection->dtlsIsServer = STRCMP(pSessionDescription->sdpAttributes[i].attributeValue, "active") == 0;
+        } else if (STRCMP(pSessionDescription->sdpAttributes[i].attributeName, "ice-options") == 0 &&
+                   STRSTR(pSessionDescription->sdpAttributes[i].attributeValue, "trickle") != NULL) {
+            NULLABLE_SET_VALUE(pKvsPeerConnection->canTrickleIce, TRUE);
+        }
+    }
+
+    for (i = 0; i < pSessionDescription->mediaCount; i++) {
+#ifdef ENABLE_DATA_CHANNEL
+        if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "application", SIZEOF("application") - 1) == 0) {
+            pKvsPeerConnection->sctpIsEnabled = TRUE;
+        }
+#endif
+
+        for (j = 0; j < pSessionDescription->mediaDescriptions[i].mediaAttributesCount; j++) {
+            if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "ice-ufrag") == 0) {
+                remoteIceUfrag = pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue;
+            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "ice-pwd") == 0) {
+                remoteIcePwd = pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue;
+            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "candidate") == 0) {
+                // Ignore the return value, we have candidates we don't support yet like TURN
+                iceAgentAddRemoteCandidate(pKvsPeerConnection->pIceAgent, pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue);
+            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "fingerprint") == 0) {
+                STRNCPY(pKvsPeerConnection->remoteCertificateFingerprint,
+                        pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue + 8, CERTIFICATE_FINGERPRINT_LENGTH);
+            } else if (pKvsPeerConnection->isOffer &&
+                       STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "setup") == 0) {
+                pKvsPeerConnection->dtlsIsServer = STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue, "active") == 0;
+            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "ice-options") == 0 &&
+                       STRSTR(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue, "trickle") != NULL) {
+                NULLABLE_SET_VALUE(pKvsPeerConnection->canTrickleIce, TRUE);
+                // This code is only here because Chrome does NOT adhere to the standard and adds ice-options as a media level attribute
+                // The standard dictates clearly that it should be a session level attribute:  https://tools.ietf.org/html/rfc5245#page-76
+            } else if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "extmap") == 0 &&
+                       STRSTR(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue, TWCC_EXT_URL) != NULL) {
+                pKvsPeerConnection->twccExtId = parseExtId(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeValue);
+            }
+        }
+    }
+
+    CHK(remoteIceUfrag != NULL && remoteIcePwd != NULL, STATUS_SESSION_DESCRIPTION_MISSING_ICE_VALUES);
+    CHK(pKvsPeerConnection->remoteCertificateFingerprint[0] != '\0', STATUS_SESSION_DESCRIPTION_MISSING_CERTIFICATE_FINGERPRINT);
+
+    if (!IS_EMPTY_STRING(pKvsPeerConnection->remoteIceUfrag) && !IS_EMPTY_STRING(pKvsPeerConnection->remoteIcePwd) &&
+        STRNCMP(pKvsPeerConnection->remoteIceUfrag, remoteIceUfrag, MAX_ICE_UFRAG_LEN) != 0 &&
+        STRNCMP(pKvsPeerConnection->remoteIcePwd, remoteIcePwd, MAX_ICE_PWD_LEN) != 0) {
+        CHK_STATUS(generateJSONSafeString(pKvsPeerConnection->localIceUfrag, LOCAL_ICE_UFRAG_LEN));
+        CHK_STATUS(generateJSONSafeString(pKvsPeerConnection->localIcePwd, LOCAL_ICE_PWD_LEN));
+        CHK_STATUS(iceAgentRestart(pKvsPeerConnection->pIceAgent, pKvsPeerConnection->localIceUfrag, pKvsPeerConnection->localIcePwd));
+        CHK_STATUS(iceAgentStartGathering(pKvsPeerConnection->pIceAgent));
+    }
+
+    STRNCPY(pKvsPeerConnection->remoteIceUfrag, remoteIceUfrag, MAX_ICE_UFRAG_LEN);
+    STRNCPY(pKvsPeerConnection->remoteIcePwd, remoteIcePwd, MAX_ICE_PWD_LEN);
+
+    CHK_STATUS(iceAgentStartAgent(pKvsPeerConnection->pIceAgent, pKvsPeerConnection->remoteIceUfrag, pKvsPeerConnection->remoteIcePwd,
+                                  pKvsPeerConnection->isOffer));
+
+    if (!pKvsPeerConnection->isOffer) {
+        CHK_STATUS(setPayloadTypesFromOffer(pKvsPeerConnection->pCodecTable, pKvsPeerConnection->pRtxTable, pSessionDescription));
+    }
+    CHK_STATUS(setTransceiverPayloadTypes(pKvsPeerConnection->pCodecTable, pKvsPeerConnection->pRtxTable, pKvsPeerConnection->pTransceivers));
+    CHK_STATUS(setReceiversSsrc(pSessionDescription, pKvsPeerConnection->pTransceivers));
+
+CleanUp:
 
     LEAVES();
     return retStatus;

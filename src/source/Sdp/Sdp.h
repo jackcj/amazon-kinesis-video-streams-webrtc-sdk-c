@@ -210,7 +210,7 @@ typedef struct {
 } SessionDescription, *PSessionDescription;
 
 // Return code maps to an errno just for SDP parsing
-STATUS deserializeSessionDescription(PSessionDescription, PCHAR);
+STATUS deserializeSessionDescription(PSessionDescription, PCHAR, UINT32);
 
 // Return code maps to a code if we are trying to serialize an invalid session_description
 STATUS serializeSessionDescription(PSessionDescription, PCHAR, PUINT32);
