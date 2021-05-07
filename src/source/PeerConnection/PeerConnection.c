@@ -848,6 +848,31 @@ CleanUp:
     return retStatus;
 }
 
+STATUS peerConnectionRemoteMediaChannelCreated(PRtcPeerConnection pRtcPeerConnection, UINT64 customData, RtcRemoteMediaChannelCreated cb)
+{
+    ENTERS();
+    STATUS retStatus = STATUS_SUCCESS;
+    PKvsPeerConnection pKvsPeerConnection = (PKvsPeerConnection)pRtcPeerConnection;
+    BOOL locked = FALSE;
+
+    CHK(pKvsPeerConnection != NULL && cb != NULL, STATUS_NULL_ARG);
+
+    MUTEX_LOCK(pKvsPeerConnection->peerConnectionObjLock);
+    locked = TRUE;
+
+    pKvsPeerConnection->onRemoteMediaChannelCreatedFn = cb;
+    pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData = customData;
+
+CleanUp:
+
+    if (locked) {
+        MUTEX_UNLOCK(pKvsPeerConnection->peerConnectionObjLock);
+    }
+
+    LEAVES();
+    return retStatus;
+}
+
 STATUS peerConnectionOnDataChannel(PRtcPeerConnection pRtcPeerConnection, UINT64 customData, RtcOnDataChannel rtcOnDataChannel)
 {
     ENTERS();
@@ -1004,17 +1029,7 @@ UINT32 parseExtId(PCHAR extmapValue)
 
 STATUS setRemoteDescription(PRtcPeerConnection pPeerConnection, PRtcSessionDescriptionInit pSessionDescriptionInit)
 {
-    ENTERS();
-    STATUS retStatus = STATUS_SUCCESS;
-    PCHAR remoteIceUfrag = NULL, remoteIcePwd = NULL;
-    UINT32 i, j;
-
-    CHK(pPeerConnection != NULL, STATUS_NULL_ARG);
-    PKvsPeerConnection pKvsPeerConnection = (PKvsPeerConnection) pPeerConnection;
-    CHK_STATUS(setRemoteDescriptionEx(pKvsPeerConnection, pSessionDescriptionInit->sdp, STRLEN(pSessionDescriptionInit->sdp)));
-CleanUp:
-    LEAVES();
-    return retStatus;
+    return setRemoteDescriptionEx(pPeerConnection, pSessionDescriptionInit->sdp, STRLEN(pSessionDescriptionInit->sdp));
 }
 
 STATUS createOffer(PRtcPeerConnection pPeerConnection, PRtcSessionDescriptionInit pSessionDescriptionInit)
@@ -1399,11 +1414,24 @@ STATUS setRemoteDescriptionEx(PRtcPeerConnection pPeerConnection, PCHAR sdp, UIN
     }
 
     for (i = 0; i < pSessionDescription->mediaCount; i++) {
+
+        if (pKvsPeerConnection->onRemoteMediaChannelCreatedFn != NULL)
+        {
+            if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "video", SIZEOF("video") - 1) == 0)
+            {
+                pKvsPeerConnection->onRemoteMediaChannelCreatedFn(pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData, Channel_Video);
+            }
+            else if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "audio", SIZEOF("audio") - 1) == 0)
+            {
+                pKvsPeerConnection->onRemoteMediaChannelCreatedFn(pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData, Channel_Audio);
+            }
 #ifdef ENABLE_DATA_CHANNEL
-        if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "application", SIZEOF("application") - 1) == 0) {
-            pKvsPeerConnection->sctpIsEnabled = TRUE;
-        }
+            else if (STRNCMP(pSessionDescription->mediaDescriptions[i].mediaName, "application", SIZEOF("application") - 1) == 0) {
+                pKvsPeerConnection->sctpIsEnabled = TRUE;
+                pKvsPeerConnection->onRemoteMediaChannelCreatedFn(pKvsPeerConnection->onRemoteMediaChannelCreatedCustomData, Channel_Data);
+            }
 #endif
+        }
 
         for (j = 0; j < pSessionDescription->mediaDescriptions[i].mediaAttributesCount; j++) {
             if (STRCMP(pSessionDescription->mediaDescriptions[i].sdpAttributes[j].attributeName, "ice-ufrag") == 0) {

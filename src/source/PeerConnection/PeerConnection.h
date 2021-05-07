@@ -128,6 +128,9 @@ typedef struct {
     PTwccManager pTwccManager;
     RtcOnSenderBandwidthEstimation onSenderBandwidthEstimation;
     UINT64 onSenderBandwidthEstimationCustomData;
+    //add by chenjie 2021-05-06
+    UINT64 onRemoteMediaChannelCreatedCustomData;
+    RtcRemoteMediaChannelCreated onRemoteMediaChannelCreatedFn;
 } KvsPeerConnection, *PKvsPeerConnection;
 
 typedef struct {

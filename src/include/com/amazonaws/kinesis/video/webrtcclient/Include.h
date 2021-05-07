@@ -662,7 +662,15 @@ typedef SIGNALING_CLIENT_HANDLE* PSIGNALING_CLIENT_HANDLE;
 ////////////////////////////////////////////////
 /// Public Enums
 ////////////////////////////////////////////////
+///add by chenjie 2021-05-06
 
+typedef enum
+{
+    Channel_Audio = 0,
+    Channel_Video,
+    Channel_Data,
+    Channel_Unsupported
+}MediaChannelType;
 /*! \addtogroup PublicEnums
  * @brief RTC_PEER_CONNECTION_STATE Stats of RTC peer connection
  * Reference: https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum
@@ -836,6 +844,13 @@ typedef enum {
 ////////////////////////////////////////////////////
 /// Extra callbacks definitions
 ////////////////////////////////////////////////////
+
+/// <summary>
+/// add by chenjie 2021-05-06
+/// remote media channel created;
+/// </summary>
+typedef STATUS(*RtcRemoteMediaChannelCreated)(UINT64, MediaChannelType);
+
 
 /*! \addtogroup Callbacks
  * @brief RtcOnFrame is fired everytime a frame is received from
@@ -1456,6 +1471,9 @@ PUBLIC_API STATUS freePeerConnection(PRtcPeerConnection*);
  * @return STATUS code of the execution. STATUS_SUCCESS on success
  */
 PUBLIC_API STATUS peerConnectionOnIceCandidate(PRtcPeerConnection, UINT64, RtcOnIceCandidate);
+
+//add by chenjie 2021-05-06
+PUBLIC_API STATUS peerConnectionRemoteMediaChannelCreated(PRtcPeerConnection, UINT64, RtcRemoteMediaChannelCreated);
 
 /**
  * @brief Set a callback for transport-wide sender bandwidth estimation results
